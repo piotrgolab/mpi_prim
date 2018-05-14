@@ -1,10 +1,10 @@
 ﻿#include <stdio.h>
 #include <mpi.h>
-#define INF 999
 
 
 
-int **alloc_2d_int(int rows, int cols) {
+
+int** alloc_2d_int(int rows, int cols) {
     int *data = (int *)malloc(rows*cols*sizeof(int));
     int **array= (int **)malloc(rows*sizeof(int*));
     for (int i=0; i<rows; i++)
@@ -15,25 +15,18 @@ int **alloc_2d_int(int rows, int cols) {
 
 
 
-int main((int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 
 
+    int INF = 999;
     int n = 6; //liczba wierzcholkow
     int p = 3; //liczba procesów
     //Let p be the number of processes, and let n be the number of vertices in the graph.
     //The set V is partitioned into p subsets using the 1-D block mapping
 
     //Reprezentacja grafu przez macierz sasiedztwa, graf z ksiazki
-    int V[n][n] =
-    {
-        {0, 1, 3, INF, INF, 3},
-        {1, 0, 5, 1, INF, INF},
-        {3, 5, 0, 2, 1, INF},
-        {INF, 1, 2, 0, 4, INF},
-        {INF, INF, 1, 4, 0, 5},
-        {2, INF, INF, INF, 5, 0}
-    };
+    int V[6][6] = { {0, 1, 3, INF, INF, 3}, {1, 0, 5, 1, INF, INF}, {3, 5, 0, 2, 1, INF}, {INF, 1, 2, 0, 4, INF}, {INF, INF, 1, 4, 0, 5}, {2, INF, INF, INF, 5, 0} };
 
     //Zalozylem, ze skoro mamy 6 rzedow i kolumn, a dzielic bede na grupy rzedow,
     //to odpowiednia liczba procesow dla tak malego grafu wyniesie 3 (po 2 rzedy na proces)
@@ -104,41 +97,44 @@ int main((int argc, char *argv[])
 
 
     int numberOfProcesses = p;
-    int dimOfMatrix;	//dimension of divided matrix
-    int V_iLocal[][];	//local storage for V_i
-    int minLocal;		//minium weight localy
-    int minGlobal;		//minium weight globaly
-    int visited[n] = 0;	//0 not visited, 1 visited
-    int prod;			//start of columns containing in local process
-    int sup;			//end of columns containing in local process
-    int temp;			//will be used to help reduce edge
-    int indexMinLocal;	//index of matrix in local process
-    int indexMinGlobal;	//index of matrix in global process
-    int costLocal;		//cost of adding edge in local process
-    int costGlobal;		//cost of MST
+    int dimOfMatrix;    //dimension of divided matrix
+    int V_iLocal[n][n]; //local storage for V_i
+    int minLocal;       //minium weight localy
+    int minGlobal;      //minium weight globaly
+    int visited[n]; //0 not visited, 1 visited
+    int key[n];
+    int prod;           //start of columns containing in local process
+    int sup;            //end of columns containing in local process
+    int strip;
+    int temp;           //will be used to help reduce edge
+    int indexMinLocal;  //index of matrix in local process
+    int indexMinGlobal; //index of matrix in global process
+    int costLocal;      //cost of adding edge in local process
+    int costGlobal;     //cost of MST
 
     int previewOfMST[n];//holds number of vertices added to MST
 
 
 
     int rank;
-    int status; 		//status of recv
+    MPI_Status status;      //status of recv
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numberOfProcesses);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     if(rank == 0)
     {
-        printf("Jestem procesem 0\n", );
+        printf("Jestem procesem 0\n" );
     }
 
     //BCast value of n to other processes
-    MPI_BCast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    dimOfMatrix = n / numberOfProcesses;	// !!! doesnt check if there is more processes than vertices -- now only works with n%p==0!!!
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    dimOfMatrix = n / numberOfProcesses;    // !!! doesnt check if there is more processes than vertices -- now only works with n%p==0!!!
 
-	int **m;
-	/*...*/
-	m = alloc_2d_init(n/p,n);
+    int **m;
+    /*...*/
+    //TODO pierwszy zmieniec na n/p
+    m = alloc_2d_int(dimOfMatrix,n);
 
     if(rank == 0)
     {
@@ -147,21 +143,21 @@ int main((int argc, char *argv[])
         //prawdopodobnie nalezy póścić to w forze i w pierwszym polu wpisywać początki tablicy a w dest numer iteracji
         for (int j = 1; j < numberOfProcesses; j++)
         {
-			int V_temp[n / p][n];
-			for(int a = 0 ; a < (n/p) ; a ++)
-			{
-				for (int b = 0 ; b < n ; b ++)
-				{
-					V_temp[a][b] = V_i[j - 1][a][b];
-				}	
-			}		
+            int V_temp[n / p][n];
+            for(int a = 0 ; a < (n/p) ; a ++)
+            {
+                for (int b = 0 ; b < n ; b ++)
+                {
+                    V_temp[a][b] = V_i[j - 1][a][b];
+                }   
+            }       
             MPI_Send(&(V_temp[0][0])/*buff initial adres &(V_i[j - 1][n][n])*/, n*(n/p)/*dimOfMatrix*/, MPI_INT, /*dest*/ j, 1, MPI_COMM_WORLD);
         }
     }
     else
     {
         //TODO implemet receving V_i from process 0 and saveing to V_iLocal
-    	//
+        //
 
         MPI_Recv(/*local Vi*/&(m[0][0]), n*(n/p)/*dimOfMatrix*/, MPI_INT, 0, 1, MPI_COMM_WORLD, &status);
     }
@@ -171,20 +167,20 @@ int main((int argc, char *argv[])
 
     if(rank != 0)
     {
-        for(i = 0; i < dimOfMatrix; i++)
+        for(int i = 0; i < dimOfMatrix; i++)
             key[i] = INF;
     }
     else
     {
-        for(i = 1; i < dimOfMatrix; i++)
+        for(int i = 1; i < dimOfMatrix; i++)
             key[i] = INF;
         key[0] = 0;
     }
 
-    if(rank != numtasks - 1)
+    if(rank != numberOfProcesses - 1)
     {
-        prod = rank * dim;
-        sup = prod + dim;
+        prod = rank * dimOfMatrix;
+        sup = prod + dimOfMatrix;
     }
     else
     {
@@ -207,17 +203,17 @@ int main((int argc, char *argv[])
         }
 
         //Determine gobal minimum of weight
-        MPI_AllReduce(&minLocal, &minGlobal, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+        MPI_Allreduce(&minLocal, &minGlobal, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 
         if(minGlobal == INF) break;
 
         if(minLocal == minGlobal)
         {
             temp = indexMinLocal + prod;
-            MPI_AllReduce(&temp, $indexMinGlobal, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(&temp, &indexMinGlobal, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
         }
         else
-            MPI_AllReduce(&n, $indexMinGlobal, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(&n, &indexMinGlobal, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 
 
         //If newest node added to MST is from this local process mark it as visited
@@ -229,10 +225,11 @@ int main((int argc, char *argv[])
         }
 
         //TODO add putting value to the key and index of added edge
-        for(i = 0; i < dim; i++)
+        for(int i = 0; i < dimOfMatrix; i++)
         {
             if(m[indexMinGlobal][i] < key[i] && visited[i] == 0)
             {
+                //TODO zamiana indeksów
                 key[i] = m[indexMinGlobal][i];
                 previewOfMST[i] = indexMinGlobal;
             }
@@ -241,7 +238,7 @@ int main((int argc, char *argv[])
         MPI_Barrier(MPI_COMM_WORLD);
     }
 
-    MPI_Reduce($costLocal, &costGlobal, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&costLocal, &costGlobal, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
 
     if(rank == 0)
@@ -282,6 +279,3 @@ int main((int argc, char *argv[])
     MPI_Finalize();
     return 0;
 }
-
-
-
