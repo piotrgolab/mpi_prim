@@ -16,3 +16,7 @@ d_i - tablice odległosci
 4) P0 wybiera najkrótszą krawędź spośród przysłanych i dodaje do MST i robi BCast MST do reszty
 5) Każdy proces Pi uaktualnia tablice Di według punktu 2.
 6) Powtarzanie 2-5 dopóki nie MST = V
+
+
+kompilacja:  /opt/nfs/mpich-3.2/bin/mpicc -o prim_mst prim_mst.c
+uruchomienie: mpiexec -n 3 ./pri_mmst
